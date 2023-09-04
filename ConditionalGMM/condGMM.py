@@ -28,7 +28,8 @@ class CondGMM(object):
         weights = np.asarray(weights)
         means = np.asarray(means)
         covs = np.asarray(covs)
-        fixed_indices = np.asarray(fixed_indices, dtype=np.int)
+        # fixed_indices = np.asarray(fixed_indices, dtype=np.int)
+        fixed_indices = np.asarray(fixed_indices, dtype=int)
         assert weights.ndim == 1
         assert means.ndim == 2
         assert covs.ndim == 3
@@ -227,7 +228,59 @@ class CondGMM(object):
 
         """
         return np.exp(self.joint_logpdf(x1, x2))
-    
+
+    # original function
+    # def rvs(self, x2, size = 1, random_state = None, component_labels = False):
+    #     """Draw random samples from the conditional GMM
+    #     conditioned on `x2`.
+
+    #     Args:
+    #         x2 (array-like): observation of the fixed variable;
+    #             default is `None`, which uses the unconditional
+    #             mean of x2 over all components
+    #         size (int): number of random samples; default is 1
+    #         random_state (int): state that numpy uses for drawing samples
+    #         component_labels (bool): if `True`, also return the label for 
+    #             which component each RV was drawn from
+
+    #     Returns:
+    #         random variable distributed according to the conditional GMM
+
+    #     """
+    #     assert size >= 1
+
+    #     if x2 is None:
+    #         x2 = self.unconditional_x2_mean()
+
+    #     if random_state is not None:
+    #         np.random.seed(random_state)
+        
+    #     #Output array
+    #     rvs = np.zeros((size, self.x1_ndim))
+    #     #rvs = np.squeeze(rvs)
+
+    #     #Choose which components the data come from
+    #     c_weights = self.conditional_weights(x2)
+    #     inds = np.arange(len(c_weights))
+    #     components = np.random.choice(inds, size = size, p = c_weights)
+    #     #_, counts = np.unique(components, return_counts = True)
+
+    #     #Get RVs from each component
+    #     dists = self.conditionalMVNs
+    #     for i in inds:
+    #         n = len(components[components == i])
+    #         if n == 0: #Skip if no draws
+    #             continue
+    #         rvs_i = np.atleast_2d(dists[i].rvs(x2 = x2, size = n))
+    #         rvs[i == components] = rvs_i
+
+    #     if component_labels:
+    #         return rvs, components
+    #     else:
+    #         return rvs
+
+
+    # my version
     def rvs(self, x2, size = 1, random_state = None, component_labels = False):
         """Draw random samples from the conditional GMM
         conditioned on `x2`.
@@ -245,6 +298,11 @@ class CondGMM(object):
             random variable distributed according to the conditional GMM
 
         """
+        # the output, in general, is constructed from sampling from different
+        # mixture components and therefore the number of samples
+        # could changed depending on the weights.
+        # loop over and create result lists then
+        # at the end create an array
         assert size >= 1
 
         if x2 is None:
@@ -253,26 +311,51 @@ class CondGMM(object):
         if random_state is not None:
             np.random.seed(random_state)
         
-        #Output array
-        rvs = np.zeros((size, self.x1_ndim))
-        #rvs = np.squeeze(rvs)
 
         #Choose which components the data come from
         c_weights = self.conditional_weights(x2)
         inds = np.arange(len(c_weights))
         components = np.random.choice(inds, size = size, p = c_weights)
-        #_, counts = np.unique(components, return_counts = True)
+        counts = []
+        for i in inds:
+            counts.append((components==i).sum())
+        # _, counts = np.unique(components, return_counts = True)
+        # inds: identfies which mixture component
+        # counts: number of samples to draw from that mixture component
+        # print(np.c_[inds, counts])
+        # print(inds)
+        # print(counts)
 
         #Get RVs from each component
         dists = self.conditionalMVNs
+        results = []
         for i in inds:
-            n = len(components[components == i])
-            if n == 0: #Skip if no draws
+            # loop over components
+            if counts[i] == 0: #skif if no draws
                 continue
-            rvs_i = np.atleast_2d(dists[i].rvs(x2 = x2, size = n))
-            rvs[i == components] = rvs_i
+            result = np.atleast_2d(dists[i].rvs(x2=x2, size=counts[i]))
+            results.append(result.T)
+
+        rvs = np.row_stack(results)
+
+
+        
+        # for i in inds:
+        #     n = len(components[components == i])
+        #     if n == 0: #Skip if no draws
+        #         continue
+        #     rvs_i = np.atleast_2d(dists[i].rvs(x2 = x2, size = n))
+        #     rvs[i == components] = rvs_i
 
         if component_labels:
             return rvs, components
         else:
             return rvs
+
+        # #Output array
+        # rvs = np.zeros((size, self.x1_ndim))
+        # #rvs = np.squeeze(rvs)
+
+
+
+
